@@ -10,6 +10,7 @@ from PIL import Image
 import cv2
 import torch
 from torchvision import transforms
+from library.utils import get_message
 
 import library.model_util as model_util
 import library.train_util as train_util
@@ -51,22 +52,20 @@ def get_npz_filename(data_dir, image_key, is_full_path, recursive):
 def main(args):
     # assert args.bucket_reso_steps % 8 == 0, f"bucket_reso_steps must be divisible by 8 / bucket_reso_stepは8で割り切れる必要があります"
     if args.bucket_reso_steps % 8 > 0:
-        print(f"resolution of buckets in training time is a multiple of 8 / 学習時の各bucketの解像度は8単位になります")
+        print(get_message({"en": "The resolution of buckets during training time should be a multiple of 8.", "ja": "学習時の各bucketの解像度は8単位になります"}))
     if args.bucket_reso_steps % 32 > 0:
-        print(
-            f"WARNING: bucket_reso_steps is not divisible by 32. It is not working with SDXL / bucket_reso_stepsが32で割り切れません。SDXLでは動作しません"
-        )
+        print(get_message({"en": "WARNING: bucket_reso_steps is not divisible by 32. This will not work with SDXL.", "ja": "bucket_reso_stepsが32で割り切れません。SDXLでは動作しません"}))
 
     train_data_dir_path = Path(args.train_data_dir)
     image_paths: List[str] = [str(p) for p in train_util.glob_images_pathlib(train_data_dir_path, args.recursive)]
     print(f"found {len(image_paths)} images.")
 
     if os.path.exists(args.in_json):
-        print(f"loading existing metadata: {args.in_json}")
+        print(get_message({"en": f"loading existing metadata: {args.in_json}", "ja": f"既存のメタデータを読み込み中: {args.in_json}"}))
         with open(args.in_json, "rt", encoding="utf-8") as f:
             metadata = json.load(f)
     else:
-        print(f"no metadata / メタデータファイルがありません: {args.in_json}")
+        print(get_message({"en": f"no metadata: {args.in_json}", "ja": f"メタデータファイルがありません: {args.in_json}"}))
         return
 
     weight_dtype = torch.float32
@@ -81,7 +80,10 @@ def main(args):
 
     # bucketのサイズを計算する
     max_reso = tuple([int(t) for t in args.max_resolution.split(",")])
-    assert len(max_reso) == 2, f"illegal resolution (not 'width,height') / 画像サイズに誤りがあります。'幅,高さ'で指定してください: {args.max_resolution}"
+    assert len(max_reso) == 2, get_message({
+        "en": f"Illegal resolution (not 'width,height'): {args.max_resolution}",
+        "ja": f"画像サイズに誤りがあります。'幅,高さ'で指定してください: {args.max_resolution}"
+    })
 
     bucket_manager = train_util.BucketManager(
         args.bucket_no_upscale, max_reso, args.min_bucket_reso, args.max_bucket_reso, args.bucket_reso_steps
@@ -89,9 +91,10 @@ def main(args):
     if not args.bucket_no_upscale:
         bucket_manager.make_buckets()
     else:
-        print(
-            "min_bucket_reso and max_bucket_reso are ignored if bucket_no_upscale is set, because bucket reso is defined by image size automatically / bucket_no_upscaleが指定された場合は、bucketの解像度は画像サイズから自動計算されるため、min_bucket_resoとmax_bucket_resoは無視されます"
-        )
+        print(get_message({
+            "en": "min_bucket_reso and max_bucket_reso are ignored if bucket_no_upscale is set, because bucket reso is defined by image size automatically",
+            "ja": "bucket_no_upscaleが指定された場合は、bucketの解像度は画像サイズから自動計算されるため、min_bucket_resoとmax_bucket_resoは無視されます"
+        }))
 
     # 画像をひとつずつ適切なbucketに割り当てながらlatentを計算する
     img_ar_errors = []
@@ -130,7 +133,10 @@ def main(args):
                 if image.mode != "RGB":
                     image = image.convert("RGB")
             except Exception as e:
-                print(f"Could not load image path / 画像を読み込めません: {image_path}, error: {e}")
+                print(get_message({
+                    "en": f"Could not load image path: {image_path}, error: {e}",
+                    "ja": f"画像を読み込めません: {image_path}, エラー: {e}"
+                }))
                 continue
 
         image_key = image_path if args.full_path else os.path.splitext(os.path.basename(image_path))[0]
@@ -193,58 +199,57 @@ def main(args):
         json.dump(metadata, f, indent=2)
     print("done!")
 
-
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("train_data_dir", type=str, help="directory for train images / 学習画像データのディレクトリ")
-    parser.add_argument("in_json", type=str, help="metadata file to input / 読み込むメタデータファイル")
-    parser.add_argument("out_json", type=str, help="metadata file to output / メタデータファイル書き出し先")
-    parser.add_argument("model_name_or_path", type=str, help="model name or path to encode latents / latentを取得するためのモデル")
-    parser.add_argument("--v2", action="store_true", help="not used (for backward compatibility) / 使用されません（互換性のため残してあります）")
-    parser.add_argument("--batch_size", type=int, default=1, help="batch size in inference / 推論時のバッチサイズ")
+    parser.add_argument("train_data_dir", type=str, help=get_message({"en": "training image data directory", "ja": "学習画像データのディレクトリ"}))
+    parser.add_argument("in_json", type=str, help=get_message({"en": "metadata file to load", "ja": "読み込むメタデータファイル"}))
+    parser.add_argument("out_json", type=str, help=get_message({"en": "metadata file save destination", "ja": "メタデータファイル書き出し先"}))
+    parser.add_argument("model_name_or_path", type=str, help=get_message({"en": "model/path to encode latents", "ja": "latentを取得するためのモデル"}))
+    parser.add_argument("--v2", action="store_true", help=get_message({"en": "not used (left for compatibility)", "ja": "使用されません（互換性のため残してあります）"}))
+    parser.add_argument("--batch_size", type=int, default=1, help=get_message({"en": "batch size during inference", "ja": "推論時のバッチサイズ"}))
     parser.add_argument(
         "--max_data_loader_n_workers",
         type=int,
         default=None,
-        help="enable image reading by DataLoader with this number of workers (faster) / DataLoaderによる画像読み込みを有効にしてこのワーカー数を適用する（読み込みを高速化）",
+        help=get_message({"en": "enable image loading by DataLoader and apply this number of workers (faster loading)", "ja": "DataLoaderによる画像読み込みを有効にしてこのワーカー数を適用する（読み込みを高速化）"}),
     )
     parser.add_argument(
         "--max_resolution",
         type=str,
         default="512,512",
-        help="max resolution in fine tuning (width,height) / fine tuning時の最大画像サイズ 「幅,高さ」（使用メモリ量に関係します）",
+        help=get_message({"en": "max resolution during fine tuning (width,height)", "ja": "fine tuning時の最大画像サイズ 「幅,高さ」（使用メモリ量に関係します）"}),
     )
-    parser.add_argument("--min_bucket_reso", type=int, default=256, help="minimum resolution for buckets / bucketの最小解像度")
-    parser.add_argument("--max_bucket_reso", type=int, default=1024, help="maximum resolution for buckets / bucketの最小解像度")
+    parser.add_argument("--min_bucket_reso", type=int, default=256, help=get_message({"en": "minimum resolution for buckets", "ja": "bucketの最小解像度"}))
+    parser.add_argument("--max_bucket_reso", type=int, default=1024, help=get_message({"en": "maximum resolution for buckets", "ja": "bucketの最小解像度"}))
     parser.add_argument(
         "--bucket_reso_steps",
         type=int,
         default=64,
-        help="steps of resolution for buckets, divisible by 8 is recommended / bucketの解像度の単位、8で割り切れる値を推奨します",
+        help=get_message({"en": "steps of resolution for buckets, divisible by 8 is recommended", "ja": "bucketの解像度の単位、8で割り切れる値を推奨します"}),
     )
     parser.add_argument(
-        "--bucket_no_upscale", action="store_true", help="make bucket for each image without upscaling / 画像を拡大せずbucketを作成します"
+        "--bucket_no_upscale", action="store_true", help=get_message({"en": "create buckets for each image without upscaling", "ja": "画像を拡大せずbucketを作成します"})
     )
     parser.add_argument(
-        "--mixed_precision", type=str, default="no", choices=["no", "fp16", "bf16"], help="use mixed precision / 混合精度を使う場合、その精度"
+        "--mixed_precision", type=str, default="no", choices=["no", "fp16", "bf16"], help=get_message({"en": "use mixed precision", "ja": "混合精度を使う場合、その精度"})
     )
     parser.add_argument(
         "--full_path",
         action="store_true",
-        help="use full path as image-key in metadata (supports multiple directories) / メタデータで画像キーをフルパスにする（複数の学習画像ディレクトリに対応）",
+        help=get_message({"en": "use full path as image-key in metadata (supports multiple directories)", "ja": "メタデータで画像キーをフルパスにする（複数の学習画像ディレクトリに対応）"}),
     )
     parser.add_argument(
-        "--flip_aug", action="store_true", help="flip augmentation, save latents for flipped images / 左右反転した画像もlatentを取得、保存する"
+        "--flip_aug", action="store_true", help=get_message({"en": "flip augmentation, save latents for flipped images", "ja": "左右反転した画像もlatentを取得、保存する"})
     )
     parser.add_argument(
         "--skip_existing",
         action="store_true",
-        help="skip images if npz already exists (both normal and flipped exists if flip_aug is enabled) / npzが既に存在する画像をスキップする（flip_aug有効時は通常、反転の両方が存在する画像をスキップ）",
+        help=get_message({"en": "skip images where npz already exists (skip both normal and flipped exists if flip_aug is enabled)", "ja": "npzが既に存在する画像をスキップする（flip_aug有効時は通常、反転の両方が存在する画像をスキップ）"}),
     )
     parser.add_argument(
         "--recursive",
         action="store_true",
-        help="recursively look for training tags in all child folders of train_data_dir / train_data_dirのすべての子フォルダにある学習タグを再帰的に探す",
+        help=get_message({"en": "recursively search for training tags in all child folders of train_data_dir", "ja": "train_data_dirのすべての子フォルダにある学習タグを再帰的に探す"}),
     )
 
     return parser
